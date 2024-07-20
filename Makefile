@@ -20,6 +20,8 @@ CONFIG_LOCALVERSION =
 # See libfdt_internal.h for details
 ASSUME_MASK ?= 0
 
+OUT_DIR ?= .
+
 CPPFLAGS = -I libfdt -I . -DFDT_ASSUME_MASK=$(ASSUME_MASK)
 WARNINGS = -Wall -Wpointer-arith -Wcast-qual -Wnested-externs \
 	-Wstrict-prototypes -Wmissing-prototypes -Wredundant-decls -Wshadow
@@ -32,6 +34,7 @@ PKG_CONFIG ?= pkg-config
 PYTHON ?= python3
 
 INSTALL = /usr/bin/install
+MKDIR_P = mkdir -p
 INSTALL_PROGRAM = $(INSTALL)
 INSTALL_LIB = $(INSTALL)
 INSTALL_DATA = $(INSTALL) -m 644
@@ -147,10 +150,11 @@ BIN += fdtdump
 BIN += fdtget
 BIN += fdtput
 BIN += fdtoverlay
+BIN += fdtoverlaymerge
 
 SCRIPTS = dtdiff
 
-all: $(BIN) libfdt
+all: $(addprefix $(OUT_DIR)/, $(BIN)) $(OUT_DIR)/libfdt
 
 # We need both Python and swig to build/install pylibfdt.
 # This builds the given make ${target} if those deps are found.
@@ -192,23 +196,23 @@ endif
 # Rules for libfdt
 #
 LIBFDT_dir = libfdt
-LIBFDT_archive = $(LIBFDT_dir)/libfdt.a
-LIBFDT_lib = $(LIBFDT_dir)/$(LIBFDT_LIB)
+LIBFDT_archive = $(OUT_DIR)/$(LIBFDT_dir)/libfdt.a
+LIBFDT_lib = $(OUT_DIR)/$(LIBFDT_dir)/$(LIBFDT_LIB)
 LIBFDT_include = $(addprefix $(LIBFDT_dir)/,$(LIBFDT_INCLUDES))
 LIBFDT_version = $(addprefix $(LIBFDT_dir)/,$(LIBFDT_VERSION))
 
 include $(LIBFDT_dir)/Makefile.libfdt
 
 .PHONY: libfdt
-libfdt: $(LIBFDT_archive) $(LIBFDT_lib)
 
-$(LIBFDT_archive): $(addprefix $(LIBFDT_dir)/,$(LIBFDT_OBJS))
+$(OUT_DIR)/libfdt: $(LIBFDT_archive) $(LIBFDT_lib)
 
-$(LIBFDT_lib): $(addprefix $(LIBFDT_dir)/,$(LIBFDT_OBJS)) $(LIBFDT_version)
+$(LIBFDT_archive): $(LIBFDT_OBJS)
+
+$(LIBFDT_lib): $(LIBFDT_OBJS) $(LIBFDT_version)
 	@$(VECHO) LD $@
-	$(CC) $(LDFLAGS) $(SHAREDLIB_LDFLAGS)$(LIBFDT_soname) -o $(LIBFDT_lib) \
-		$(addprefix $(LIBFDT_dir)/,$(LIBFDT_OBJS))
-	ln -sf $(LIBFDT_LIB) $(LIBFDT_dir)/$(LIBFDT_soname)
+	$(CC) $(LDFLAGS) $(SHAREDLIB_LDFLAGS)$(LIBFDT_soname) -o $@ $(LIBFDT_OBJS)
+	ln -sf $(OUT_DIR)/$(LIBFDT_LIB) $(OUT_DIR)/$(LIBFDT_dir)/$(LIBFDT_soname)
 
 ifneq ($(DEPTARGETS),)
 -include $(LIBFDT_OBJS:%.o=$(LIBFDT_dir)/%.d)
@@ -222,7 +226,7 @@ endif
 install-bin: all $(SCRIPTS)
 	@$(VECHO) INSTALL-BIN
 	$(INSTALL) -d $(DESTDIR)$(BINDIR)
-	$(INSTALL_PROGRAM) $(BIN) $(DESTDIR)$(BINDIR)
+	$(INSTALL_PROGRAM) $(addprefix $(OUT_DIR)/, $(BIN)) $(DESTDIR)$(BINDIR)
 	$(INSTALL_SCRIPT) $(SCRIPTS) $(DESTDIR)$(BINDIR)
 
 install-lib: all
@@ -251,26 +255,27 @@ endif
 $(VERSION_FILE): Makefile FORCE
 	$(call filechk,version)
 
+$(OUT_DIR)/dtc: $(DTC_OBJS)
 
-dtc: $(DTC_OBJS)
-
-convert-dtsv0: $(CONVERT_OBJS)
+$(OUT_DIR)/convert-dtsv0: $(CONVERT_OBJS)
 	@$(VECHO) LD $@
 	$(LINK.c) -o $@ $^
 
-fdtdump:	$(FDTDUMP_OBJS)
+$(OUT_DIR)/fdtdump: $(FDTDUMP_OBJS)
 
-fdtget:	$(FDTGET_OBJS) $(LIBFDT_lib)
+$(OUT_DIR)/fdtget: $(FDTGET_OBJS) $(LIBFDT_lib)
 
-fdtput:	$(FDTPUT_OBJS) $(LIBFDT_lib)
+$(OUT_DIR)/fdtput: $(FDTPUT_OBJS) $(LIBFDT_lib)
 
-fdtoverlay: $(FDTOVERLAY_OBJS) $(LIBFDT_lib)
+$(OUT_DIR)/fdtoverlay: $(FDTOVERLAY_OBJS) $(LIBFDT_lib)
 
-dist:
+$(OUT_DIR)/fdtoverlaymerge: $(FDTOVERLAYMERGE_OBJS) $(LIBFDT_archive)
+
+$(OUT_DIR)/dist:
 	git archive --format=tar --prefix=dtc-$(dtc_version)/ HEAD \
-		> ../dtc-$(dtc_version).tar
-	cat ../dtc-$(dtc_version).tar | \
-		gzip -9 > ../dtc-$(dtc_version).tar.gz
+		> $(OUT_DIR)/../dtc-$(dtc_version).tar
+	cat $(OUT_DIR)/../dtc-$(dtc_version).tar | \
+		gzip -9 > $(OUT_DIR)/../dtc-$(dtc_version).tar.gz
 
 
 #
@@ -293,9 +298,9 @@ KUP = kup
 KUPDIR = /pub/software/utils/dtc
 
 kup: dist
-	$(GPG) --detach-sign --armor -o ../dtc-$(dtc_version).tar.sign \
-		../dtc-$(dtc_version).tar
-	$(KUP) put ../dtc-$(dtc_version).tar.gz ../dtc-$(dtc_version).tar.sign \
+	$(GPG) --detach-sign --armor -o $(OUT_DIR)/../dtc-$(dtc_version).tar.sign \
+		$(OUT_DIR)/../dtc-$(dtc_version).tar
+	$(KUP) put $(OUT_DIR)/../dtc-$(dtc_version).tar.gz $(OUT_DIR)/../dtc-$(dtc_version).tar.sign \
 		$(KUPDIR)/dtc-$(dtc_version).tar.gz
 endif
 
@@ -308,6 +313,8 @@ tags: FORCE
 #
 # Testsuite rules
 #
+
+ifeq ($(OUT_DIR),.)
 TESTS_PREFIX=tests/
 
 TESTS_BIN += dtc
@@ -319,9 +326,9 @@ TESTS_BIN += fdtoverlay
 ifeq ($(NO_PYTHON),0)
 TESTS_PYLIBFDT += maybe_pylibfdt
 endif
-
 ifneq ($(MAKECMDGOALS),libfdt)
 include tests/Makefile.tests
+endif
 endif
 
 #
@@ -329,46 +336,58 @@ endif
 #
 STD_CLEANFILES = *~ *.o *.$(SHAREDLIB_EXT) *.d *.a *.i *.s core a.out vgcore.* \
 	*.tab.[ch] *.lex.c *.output
-
-clean: libfdt_clean pylibfdt_clean tests_clean
+CLEAN_TASKS = libfdt_clean pylibfdt_clean
+ifeq ($(OUT_DIR),.)
+CLEAN_TASKS += tests_clean
+endif
+clean: $(CLEAN_TASKS)
 	@$(VECHO) CLEAN
-	rm -f $(STD_CLEANFILES)
-	rm -f $(VERSION_FILE)
+	cd $(OUT_DIR); \
+	rm -f $(STD_CLEANFILES); \
 	rm -f $(BIN)
+	rm -f $(VERSION_FILE)
 	rm -f dtc-*.tar dtc-*.tar.sign dtc-*.tar.asc
 
 #
 # Generic compile rules
 #
-%: %.o
+$(OUT_DIR)/%: $(OUT_DIR)/%.o
+	@$(MKDIR_P) $(@D)
 	@$(VECHO) LD $@
 	$(LINK.c) -o $@ $^ $(LDLIBS_$*)
 
-%.o: %.c
+$(OUT_DIR)/%.o: %.c
+	@$(MKDIR_P) $(@D)
 	@$(VECHO) CC $@
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -c $<
 
-%.o: %.S
+$(OUT_DIR)/%.o: %.S
+	@$(MKDIR_P) $(@D)
 	@$(VECHO) AS $@
 	$(CC) $(CPPFLAGS) $(AFLAGS) -D__ASSEMBLY__ -o $@ -c $<
 
-%.d: %.c
+$(OUT_DIR)/%.d: %.c
+	@$(MKDIR_P) $(@D)
 	@$(VECHO) DEP $<
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MM -MG -MT "$*.o $@" $< > $@
 
-%.d: %.S
+$(OUT_DIR)/%.d: %.S
+	@$(MKDIR_P) $(@D)
 	@$(VECHO) DEP $<
 	$(CC) $(CPPFLAGS) -MM -MG -MT "$*.o $@" $< > $@
 
-%.i:	%.c
+$(OUT_DIR)/%.i:	%.c
+	@$(MKDIR_P) $(@D)
 	@$(VECHO) CPP $@
 	$(CC) $(CPPFLAGS) -E $< > $@
 
-%.s:	%.c
+$(OUT_DIR)/%.s:	%.c
+	@$(MKDIR_P) $(@D)
 	@$(VECHO) CC -S $@
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -S $<
 
-%.a:
+$(OUT_DIR)/%.a:
+	@$(MKDIR_P) $(@D)
 	@$(VECHO) AR $@
 	$(AR) $(ARFLAGS) $@ $^
 

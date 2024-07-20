@@ -339,6 +339,7 @@ int fdt_add_subnode_namelen(void *fdt, int parentoffset,
 	int err;
 	uint32_t tag;
 	fdt32_t *endtag;
+	int depth = 0;
 
 	FDT_RW_PROBE(fdt);
 
@@ -348,12 +349,16 @@ int fdt_add_subnode_namelen(void *fdt, int parentoffset,
 	else if (offset != -FDT_ERR_NOTFOUND)
 		return offset;
 
-	/* Try to place the new node after the parent's properties */
-	fdt_next_tag(fdt, parentoffset, &nextoffset); /* skip the BEGIN_NODE */
+	/* Try to place the new node at the end of the parent */
+	nextoffset = parentoffset;
 	do {
 		offset = nextoffset;
 		tag = fdt_next_tag(fdt, offset, &nextoffset);
-	} while ((tag == FDT_PROP) || (tag == FDT_NOP));
+		if (tag == FDT_BEGIN_NODE)
+			depth++;
+		else if (tag == FDT_END_NODE)
+			depth--;
+	} while (depth > 0);
 
 	nh = fdt_offset_ptr_w_(fdt, offset);
 	nodelen = sizeof(*nh) + FDT_TAGALIGN(namelen+1) + FDT_TAGSIZE;

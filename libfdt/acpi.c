@@ -30,7 +30,7 @@
 
 #include "libacpi.h"
 
-uint8_t acpi_csum(const void *base, int n) {
+uint8_t acpi_csum(void *base, int n) {
 	uint8_t *p;
 	uint8_t sum;
 	int bytesDone;

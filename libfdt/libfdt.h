@@ -2067,6 +2067,24 @@ int fdt_del_node(void *fdt, int nodeoffset);
  */
 int fdt_overlay_apply(void *fdt, void *fdto);
 
+/**
+ * fdt_overlay_merge - Merge two overlays into one
+ * @fdt: pointer to the first device tree overlay blob
+ * @fdto: pointer to the second device tree overlay blob
+ * @fdto_nospace: indicates if FDT_ERR_NOSPACE error code applies to @fdto
+ *
+ * fdt_overlay_merge() will merge second overlay blob into first overlay blob.
+ *
+ * Expect the first device tree to be modified, even if the function
+ * returns an error.
+ *
+ * returns:
+ *	0, on success
+ *	-FDT_ERR_NOSPACE, there's not enough space in first device tree blob
+ *	-FDT_ERR_BADVALUE
+ */
+int fdt_overlay_merge(void *fdt, void *fdto, int *fdto_nospace);
+
 /**********************************************************************/
 /* Debugging / informational functions                                */
 /**********************************************************************/
